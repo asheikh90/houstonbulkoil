@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion'
 import { 
   Phone, 
@@ -19,8 +19,11 @@ import {
   Users,
   Factory,
   ArrowDown,
-  X
+  X,
+  Loader2
 } from 'lucide-react'
+import { supabase } from './lib/supabase'
+import { validateEmail, validatePhone, formatPhone } from './utils/validation'
 
 function App() {
   const [formData, setFormData] = useState({
@@ -33,8 +36,13 @@ function App() {
     message: ''
   })
   
+  const [formErrors, setFormErrors] = useState({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitStatus, setSubmitStatus] = useState(null) // 'success', 'error', or null
   const [showFloatingBar, setShowFloatingBar] = useState(false)
   const [showPriceChallenge, setShowPriceChallenge] = useState(false)
+  
+  const nameInputRef = useRef(null)
   const { scrollY } = useScroll()
   const y1 = useTransform(scrollY, [0, 300], [0, -50])
   const y2 = useTransform(scrollY, [0, 300], [0, -100])
@@ -47,17 +55,148 @@ function App() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
+  // Auto-focus on first input when form section comes into view
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && nameInputRef.current) {
+            setTimeout(() => {
+              nameInputRef.current.focus()
+            }, 500)
+          }
+        })
+      },
+      { threshold: 0.5 }
+    )
+
+    const quoteSection = document.getElementById('quote')
+    if (quoteSection) {
+      observer.observe(quoteSection)
+    }
+
+    return () => observer.disconnect()
+  }, [])
+
   const handleInputChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
+    const { name, value } = e.target
+    
+    // Format phone number as user types
+    if (name === 'phone') {
+      const formatted = formatPhone(value)
+      setFormData({
+        ...formData,
+        [name]: formatted
+      })
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value
+      })
+    }
+
+    // Clear error when user starts typing
+    if (formErrors[name]) {
+      setFormErrors({
+        ...formErrors,
+        [name]: ''
+      })
+    }
   }
 
-  const handleSubmit = (e) => {
+  const validateForm = () => {
+    const errors = {}
+
+    if (!formData.name.trim()) {
+      errors.name = 'Name is required'
+    }
+
+    if (!formData.company.trim()) {
+      errors.company = 'Company is required'
+    }
+
+    if (!formData.email.trim()) {
+      errors.email = 'Email is required'
+    } else if (!validateEmail(formData.email)) {
+      errors.email = 'Please enter a valid email address'
+    }
+
+    if (!formData.phone.trim()) {
+      errors.phone = 'Phone number is required'
+    } else if (!validatePhone(formData.phone)) {
+      errors.phone = 'Please enter a valid 10-digit phone number'
+    }
+
+    if (!formData.productType) {
+      errors.productType = 'Please select a product type'
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    console.log('Form submitted:', formData)
-    alert('Thank you for your quote request! We\'ll contact you within 2 hours.')
+    
+    if (!validateForm()) {
+      return
+    }
+
+    setIsSubmitting(true)
+    setSubmitStatus(null)
+
+    try {
+      // Check if Supabase is configured
+      if (!supabase) {
+        throw new Error('Database connection not configured. Please contact support.')
+      }
+
+      const { data, error } = await supabase
+        .from('quote_requests')
+        .insert([
+          {
+            name: formData.name.trim(),
+            company: formData.company.trim(),
+            email: formData.email.trim(),
+            phone: formData.phone.trim(),
+            product_type: formData.productType,
+            quantity: formData.quantity || null,
+            message: formData.message.trim() || null,
+            created_at: new Date().toISOString()
+          }
+        ])
+
+      if (error) {
+        throw error
+      }
+
+      setSubmitStatus('success')
+      setFormData({
+        name: '',
+        company: '',
+        email: '',
+        phone: '',
+        productType: '',
+        quantity: '',
+        message: ''
+      })
+
+      // Hide success message after 5 seconds
+      setTimeout(() => {
+        setSubmitStatus(null)
+      }, 5000)
+
+    } catch (error) {
+      console.error('Error submitting form:', error)
+      setSubmitStatus('error')
+      
+      // Hide error message after 5 seconds
+      setTimeout(() => {
+        setSubmitStatus(null)
+      }, 5000)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const containerVariants = {
@@ -106,7 +245,7 @@ function App() {
                 <a href="#quote" className="btn btn-primary btn-sm">
                   Get Quote
                 </a>
-                <a href="tel:+1-713-555-0199" className="btn btn-call btn-sm">
+                <a href="tel:+1-267-212-1034" className="btn btn-call btn-sm">
                   <Phone size={16} />
                   Call Now
                 </a>
@@ -152,7 +291,7 @@ function App() {
                 <a href="#quote" className="btn btn-primary" onClick={() => setShowPriceChallenge(false)}>
                   Get My Quote
                 </a>
-                <a href="tel:+1-713-555-0199" className="btn btn-secondary">
+                <a href="tel:+1-267-212-1034" className="btn btn-secondary">
                   <Phone size={18} />
                   Call Direct
                 </a>
@@ -187,18 +326,18 @@ function App() {
               <Zap size={24} color="#ffffff" />
             </motion.div>
             <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#ffffff' }}>
-              APEX<span className="gradient-text">FLUIDS</span>
+              HOUSTON<span className="gradient-text">BULK</span>OIL
             </h1>
           </motion.div>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
             <motion.a 
-              href="tel:+1-713-555-0199" 
+              href="tel:+1-267-212-1034" 
               className="btn btn-call"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
               <Phone size={18} />
-              (713) 555-0199
+              (267) 212-1034
             </motion.a>
           </div>
         </div>
@@ -377,7 +516,7 @@ function App() {
             
             <div className="supply-chain-column">
               <h4 style={{ color: '#22c55e', marginBottom: '24px', textAlign: 'center' }}>
-                ApexFluids Direct
+                Houston Bulk Oil Direct
               </h4>
               <div className="supply-chain-flow">
                 <motion.div
@@ -460,7 +599,7 @@ function App() {
                   Challenge Our Price
                 </motion.button>
                 <motion.a 
-                  href="tel:+1-713-555-0199" 
+                  href="tel:+1-267-212-1034" 
                   className="btn btn-call btn-lg"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -639,14 +778,14 @@ function App() {
                   Need immediate assistance?
                 </h4>
                 <motion.a 
-                  href="tel:+1-713-555-0199" 
+                  href="tel:+1-267-212-1034" 
                   className="btn btn-call" 
                   style={{ width: '100%' }}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
                   <Phone size={18} />
-                  Call (713) 555-0199
+                  Call (267) 212-1034
                 </motion.a>
               </motion.div>
             </motion.div>
@@ -657,31 +796,64 @@ function App() {
               transition={{ duration: 0.6 }}
               viewport={{ once: true }}
             >
+              {/* Success/Error Messages */}
+              <AnimatePresence>
+                {submitStatus === 'success' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="form-message success"
+                    style={{ marginBottom: '24px' }}
+                  >
+                    <CheckCircle size={20} />
+                    <span>Thanks! We'll contact you within 24 hours with your direct manufacturer quote.</span>
+                  </motion.div>
+                )}
+                {submitStatus === 'error' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    className="form-message error"
+                    style={{ marginBottom: '24px' }}
+                  >
+                    <X size={20} />
+                    <span>Something went wrong. Please try again or call us directly at (267) 212-1034.</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <form onSubmit={handleSubmit}>
                 <div className="grid grid-2">
                   <div className="form-group">
                     <label className="form-label">Full Name *</label>
                     <input
+                      ref={nameInputRef}
                       type="text"
                       name="name"
-                      className="form-input"
+                      className={`form-input ${formErrors.name ? 'error' : ''}`}
                       value={formData.name}
                       onChange={handleInputChange}
                       required
                       placeholder="John Smith"
+                      disabled={isSubmitting}
                     />
+                    {formErrors.name && <span className="form-error">{formErrors.name}</span>}
                   </div>
                   <div className="form-group">
                     <label className="form-label">Company *</label>
                     <input
                       type="text"
                       name="company"
-                      className="form-input"
+                      className={`form-input ${formErrors.company ? 'error' : ''}`}
                       value={formData.company}
                       onChange={handleInputChange}
                       required
                       placeholder="ABC Construction"
+                      disabled={isSubmitting}
                     />
+                    {formErrors.company && <span className="form-error">{formErrors.company}</span>}
                   </div>
                 </div>
                 <div className="grid grid-2">
@@ -690,24 +862,28 @@ function App() {
                     <input
                       type="email"
                       name="email"
-                      className="form-input"
+                      className={`form-input ${formErrors.email ? 'error' : ''}`}
                       value={formData.email}
                       onChange={handleInputChange}
                       required
                       placeholder="john@company.com"
+                      disabled={isSubmitting}
                     />
+                    {formErrors.email && <span className="form-error">{formErrors.email}</span>}
                   </div>
                   <div className="form-group">
                     <label className="form-label">Phone *</label>
                     <input
                       type="tel"
                       name="phone"
-                      className="form-input"
+                      className={`form-input ${formErrors.phone ? 'error' : ''}`}
                       value={formData.phone}
                       onChange={handleInputChange}
                       required
-                      placeholder="(713) 555-0123"
+                      placeholder="(267) 212-1034"
+                      disabled={isSubmitting}
                     />
+                    {formErrors.phone && <span className="form-error">{formErrors.phone}</span>}
                   </div>
                 </div>
                 <div className="grid grid-2">
@@ -715,10 +891,11 @@ function App() {
                     <label className="form-label">Product Type *</label>
                     <select
                       name="productType"
-                      className="form-select"
+                      className={`form-select ${formErrors.productType ? 'error' : ''}`}
                       value={formData.productType}
                       onChange={handleInputChange}
                       required
+                      disabled={isSubmitting}
                     >
                       <option value="">Select Product</option>
                       <option value="hydraulic-oil">Hydraulic Oil</option>
@@ -727,6 +904,7 @@ function App() {
                       <option value="def-adblue">DEF / AdBlue</option>
                       <option value="other">Other</option>
                     </select>
+                    {formErrors.productType && <span className="form-error">{formErrors.productType}</span>}
                   </div>
                   <div className="form-group">
                     <label className="form-label">Estimated Quantity</label>
@@ -735,6 +913,7 @@ function App() {
                       className="form-select"
                       value={formData.quantity}
                       onChange={handleInputChange}
+                      disabled={isSubmitting}
                     >
                       <option value="">Select Quantity</option>
                       <option value="55-gal-drums">55-Gallon Drums</option>
@@ -752,17 +931,28 @@ function App() {
                     value={formData.message}
                     onChange={handleInputChange}
                     placeholder="Share your current pricing or supplier quote for us to beat..."
+                    disabled={isSubmitting}
                   ></textarea>
                 </div>
                 <motion.button 
                   type="submit" 
                   className="btn btn-primary" 
                   style={{ width: '100%' }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                  whileHover={!isSubmitting ? { scale: 1.02 } : {}}
+                  whileTap={!isSubmitting ? { scale: 0.98 } : {}}
+                  disabled={isSubmitting}
                 >
-                  Get Direct Manufacturer Quote
-                  <ArrowRight size={18} />
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={18} className="spinner" />
+                      Submitting Quote Request...
+                    </>
+                  ) : (
+                    <>
+                      Get Direct Manufacturer Quote
+                      <ArrowRight size={18} />
+                    </>
+                  )}
                 </motion.button>
               </form>
             </motion.div>
@@ -800,7 +990,7 @@ function App() {
               {
                 name: 'Mike Rodriguez',
                 title: 'Fleet Manager, Southwest Logistics',
-                content: 'Switched to ApexFluids and immediately saved 35% on hydraulic oils. Their Houston delivery is lightning fast and the quality is exceptional.',
+                content: 'Switched to Houston Bulk Oil and immediately saved 35% on hydraulic oils. Their Houston delivery is lightning fast and the quality is exceptional.',
                 rating: 5,
                 savings: '35% Cost Savings'
               },
@@ -883,7 +1073,7 @@ function App() {
                   <Zap size={24} color="#ffffff" />
                 </div>
                 <h4 style={{ fontSize: '20px', fontWeight: '800', color: '#ffffff' }}>
-                  APEX<span className="gradient-text">FLUIDS</span>
+                  HOUSTON<span className="gradient-text">BULK</span>OIL
                 </h4>
               </motion.div>
               <p style={{ color: '#888888', marginBottom: '20px' }}>
@@ -938,8 +1128,8 @@ function App() {
                   whileHover={{ x: 5 }}
                 >
                   <Phone size={16} style={{ color: '#ff6b35' }} />
-                  <a href="tel:+1-713-555-0199" className="footer-link">
-                    (713) 555-0199
+                  <a href="tel:+1-267-212-1034" className="footer-link">
+                    (267) 212-1034
                   </a>
                 </motion.div>
                 <motion.div 
@@ -947,8 +1137,8 @@ function App() {
                   whileHover={{ x: 5 }}
                 >
                   <Mail size={16} style={{ color: '#ff6b35' }} />
-                  <a href="mailto:quotes@apexfluids.com" className="footer-link">
-                    quotes@apexfluids.com
+                  <a href="mailto:quotes@houstonbulkoil.com" className="footer-link">
+                    quotes@houstonbulkoil.com
                   </a>
                 </motion.div>
                 <motion.div 
@@ -963,7 +1153,7 @@ function App() {
           </div>
           <div className="footer-bottom">
             <p style={{ color: '#888888' }}>
-              © 2024 ApexFluids. All rights reserved. | Direct Manufacturer Representative
+              © 2024 Houston Bulk Oil. All rights reserved. | Direct Manufacturer Representative
             </p>
             <div style={{ display: 'flex', gap: '20px' }}>
               <a href="#" className="footer-link">Privacy Policy</a>
