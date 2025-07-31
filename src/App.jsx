@@ -39,6 +39,7 @@ function App() {
   const [formErrors, setFormErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitStatus, setSubmitStatus] = useState(null) // 'success', 'error', or null
+  const [errorDetails, setErrorDetails] = useState('')
   const [showFloatingBar, setShowFloatingBar] = useState(false)
   const [showPriceChallenge, setShowPriceChallenge] = useState(false)
   
@@ -138,38 +139,56 @@ function App() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
+    console.log('🚀 Form submission started')
+    console.log('Form data:', formData)
+    
     if (!validateForm()) {
+      console.log('❌ Form validation failed')
       return
     }
 
     setIsSubmitting(true)
     setSubmitStatus(null)
+    setErrorDetails('')
 
     try {
       // Check if Supabase is configured
       if (!supabase) {
-        throw new Error('Database connection not configured. Please contact support.')
+        throw new Error('Supabase client not initialized. Check environment variables.')
       }
 
+      console.log('✅ Supabase client available')
+
+      // Prepare data for insertion
+      const insertData = {
+        name: formData.name.trim(),
+        company: formData.company.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+        product_type: formData.productType,
+        quantity: formData.quantity || null,
+        message: formData.message.trim() || null
+      }
+
+      console.log('📝 Inserting data:', insertData)
+
+      // Simplified insert without connection test
       const { data, error } = await supabase
         .from('quote_requests')
-        .insert([
-          {
-            name: formData.name.trim(),
-            company: formData.company.trim(),
-            email: formData.email.trim(),
-            phone: formData.phone.trim(),
-            product_type: formData.productType,
-            quantity: formData.quantity || null,
-            message: formData.message.trim() || null,
-            created_at: new Date().toISOString()
-          }
-        ])
+        .insert(insertData)
+        .select()
 
       if (error) {
-        throw error
+        console.error('❌ Supabase error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw new Error(`Database error: ${error.message}`)
       }
 
+      console.log('✅ Form submitted successfully:', data)
       setSubmitStatus('success')
       setFormData({
         name: '',
@@ -187,13 +206,25 @@ function App() {
       }, 5000)
 
     } catch (error) {
-      console.error('Error submitting form:', error)
+      console.error('💥 Form submission error:', error)
       setSubmitStatus('error')
       
-      // Hide error message after 5 seconds
+      // More specific error messages
+      if (error.message.includes('Failed to fetch')) {
+        setErrorDetails('Network connection issue. Please check your internet connection and try again.')
+      } else if (error.message.includes('JWT')) {
+        setErrorDetails('Authentication issue. Please refresh the page and try again.')
+      } else if (error.message.includes('RLS')) {
+        setErrorDetails('Database permission issue. Please contact support.')
+      } else {
+        setErrorDetails(error.message || 'Unknown error occurred')
+      }
+      
+      // Hide error message after 8 seconds
       setTimeout(() => {
         setSubmitStatus(null)
-      }, 5000)
+        setErrorDetails('')
+      }, 8000)
     } finally {
       setIsSubmitting(false)
     }
@@ -326,7 +357,7 @@ function App() {
               <Zap size={24} color="#ffffff" />
             </motion.div>
             <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#ffffff' }}>
-              HOUSTON<span className="gradient-text">BULK</span>OIL
+              HOUSTON<span className="gradient-text">OIL</span>SUPPLY
             </h1>
           </motion.div>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
@@ -516,7 +547,7 @@ function App() {
             
             <div className="supply-chain-column">
               <h4 style={{ color: '#22c55e', marginBottom: '24px', textAlign: 'center' }}>
-                Houston Bulk Oil Direct
+                Houston Oil Supply Direct
               </h4>
               <div className="supply-chain-flow">
                 <motion.div
@@ -819,7 +850,14 @@ function App() {
                     style={{ marginBottom: '24px' }}
                   >
                     <X size={20} />
-                    <span>Something went wrong. Please try again or call us directly at (267) 212-1034.</span>
+                    <div>
+                      <div>Something went wrong. Please try again or call us directly at (267) 212-1034.</div>
+                      {errorDetails && (
+                        <div style={{ fontSize: '0.9rem', marginTop: '8px', opacity: 0.8 }}>
+                          Error: {errorDetails}
+                        </div>
+                      )}
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -990,7 +1028,7 @@ function App() {
               {
                 name: 'Mike Rodriguez',
                 title: 'Fleet Manager, Southwest Logistics',
-                content: 'Switched to Houston Bulk Oil and immediately saved 35% on hydraulic oils. Their Houston delivery is lightning fast and the quality is exceptional.',
+                content: 'Switched to Houston Oil Supply and immediately saved 35% on hydraulic oils. Their Houston delivery is lightning fast and the quality is exceptional.',
                 rating: 5,
                 savings: '35% Cost Savings'
               },
@@ -1073,7 +1111,7 @@ function App() {
                   <Zap size={24} color="#ffffff" />
                 </div>
                 <h4 style={{ fontSize: '20px', fontWeight: '800', color: '#ffffff' }}>
-                  HOUSTON<span className="gradient-text">BULK</span>OIL
+                  HOUSTON<span className="gradient-text">OIL</span>SUPPLY
                 </h4>
               </motion.div>
               <p style={{ color: '#888888', marginBottom: '20px' }}>
@@ -1137,8 +1175,8 @@ function App() {
                   whileHover={{ x: 5 }}
                 >
                   <Mail size={16} style={{ color: '#ff6b35' }} />
-                  <a href="mailto:quotes@houstonbulkoil.com" className="footer-link">
-                    quotes@houstonbulkoil.com
+                  <a href="mailto:quotes@houstonoilsupply.com" className="footer-link">
+                    quotes@houstonoilsupply.com
                   </a>
                 </motion.div>
                 <motion.div 
@@ -1153,7 +1191,7 @@ function App() {
           </div>
           <div className="footer-bottom">
             <p style={{ color: '#888888' }}>
-              © 2024 Houston Bulk Oil. All rights reserved. | Direct Manufacturer Representative
+              © 2024 Houston Oil Supply. All rights reserved. | Direct Manufacturer Representative
             </p>
             <div style={{ display: 'flex', gap: '20px' }}>
               <a href="#" className="footer-link">Privacy Policy</a>
