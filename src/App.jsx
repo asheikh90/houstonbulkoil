@@ -585,7 +585,7 @@ function App() {
                 maxWidth: '600px',
                 margin: '0 auto 32px'
               }}>
-                Send us your current supplier's quote. If we can't beat it by at least 10%, 
+                Send us your current supplier's quote. If we can't beat it by at least 15%, 
                 we'll pay you $500 for your time.
               </p>
               <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
